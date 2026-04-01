@@ -1,68 +1,71 @@
 # Immunity — Usage Guide
 
-## /contracts — Self-Verifying Agent Memory
+## /immunity:contracts — Self-Verifying Agent Memory
 
 ### Create Contracts
 
 ```
 # Analyze code and get contract proposals
-/contracts src/services/payment/
+/immunity:contracts src/services/payment/
 
 # Analyze entire project
-/contracts
+/immunity:contracts
 
 # Create a contract from natural language
-/contracts add "All API responses must follow { success, data, error } format" --scope "src/controllers/**"
+/immunity:contracts add "All API responses must follow { success, data, error } format" --scope "src/controllers/**"
 ```
 
-Claude analyzes the code and proposes contract candidates. The user selects which to create, and YAML files are generated in `.contracts/`.
+Claude analyzes the code, Grep-scans for existing patterns, and proposes contracts with evidence. The user selects which to create, and YAML files are generated in `.contracts/`.
 
 ### Verify Contracts
 
 ```
-# Verify all contracts
-/contracts verify
+# Verify all contracts (deterministic — Grep/Glob/Bash only, no LLM)
+/immunity:contracts verify
 
 # Verify specific scope
-/contracts verify src/auth/
+/immunity:contracts verify src/auth/
 
 # Verify specific contract
-/contracts verify payment-idempotency
+/immunity:contracts verify payment-idempotency
 ```
 
 ### Manage Contracts
 
 ```
 # List all contracts
-/contracts list
+/immunity:contracts list
 
 # Remove a contract
-/contracts remove payment-idempotency
+/immunity:contracts remove payment-idempotency
 ```
 
 ---
 
-## /critic — Adversarial Code Review
+## /immunity:critic — Adversarial Code Review
 
 ### Basic Usage
 
 ```
 # Review recent changes (git diff based)
-/critic
+/immunity:critic
 
 # Review specific file
-/critic src/services/payment/charge.ts
+/immunity:critic src/services/payment/charge.ts
 
 # Review specific directory
-/critic src/auth/
+/immunity:critic src/auth/
 
 # Review multiple files
-/critic src/services/payment/charge.ts src/services/payment/refund.ts
+/immunity:critic src/services/payment/charge.ts src/services/payment/refund.ts
 ```
 
 ### Interpreting Results
 
 ```
+[SCAN]   — Found by deterministic Grep scan. Reproducible.
+[REVIEW] — Found by LLM analysis. Judgment-based.
+
 Critical — Fix immediately. Actual bugs or security vulnerabilities.
 Warning  — Review recommended. May cause issues under certain conditions.
 
@@ -81,25 +84,25 @@ Confidence:
 
 ---
 
-## /ripple — Change Impact Chain Verification
+## /immunity:ripple — Change Impact Chain Verification
 
 ### Basic Usage
 
 ```
 # Analyze impact of a specific file
-/ripple src/services/UserService.ts
+/immunity:ripple src/services/UserService.ts
 
 # Analyze based on recent changes (git diff)
-/ripple
+/immunity:ripple
 ```
 
 ### Interpreting Results
 
 ```
 Ripple Map:
-├── Direct      — Files connected by import/call relationships
-├── Behavioral  — Files using the same code patterns
-└── Contract    — Related contracts (.contracts/ files)
+├── Direct [SCAN]       — Files found by Grep (import/call relationships)
+├── Behavioral [REVIEW] — Files found by LLM pattern analysis
+└── Contract [SCAN]     — Related contracts matched by scope
 ```
 
 ### Chain Verification
@@ -108,29 +111,33 @@ After the Ripple Map is shown, agree to "Run chain verification?" and affected f
 
 ---
 
-## /prodlens — Production Readiness Lens
+## /immunity:prodlens — Production Readiness Lens
 
 ### Basic Usage
 
 ```
 # Analyze a specific module
-/prodlens src/services/payment/
+/immunity:prodlens src/services/payment/
 
 # Analyze a specific file
-/prodlens src/services/payment/charge.ts
+/immunity:prodlens src/services/payment/charge.ts
 
 # Analyze entire project (may take longer)
-/prodlens
+/immunity:prodlens
 ```
 
 ### 6-Axis Results
 
 ```
+[SCAN]   — Found by deterministic Grep/Glob scan
+[REVIEW] — Found by LLM production analysis
+
 ✓ PASS    — No issues for this axis
 △ PARTIAL — Partially meets criteria. Improvement recommended
 ✗ FAIL    — Likely to cause issues in production
 
 Production Readiness: N/6
+Scan findings: N / Review findings: N
 ```
 
 ---
@@ -141,10 +148,10 @@ Production Readiness: N/6
 
 ```
 1. Write code
-2. /critic          → Check for bugs → Fix
-3. /ripple          → Check blast radius → Fix related code
-4. /prodlens        → Check production readiness → Harden
-5. /contracts       → Save important decisions as contracts
+2. /immunity:critic          → Check for bugs → Fix
+3. /immunity:ripple          → Check blast radius → Fix related code
+4. /immunity:prodlens        → Check production readiness → Harden
+5. /immunity:contracts       → Save important decisions as contracts
 6. Commit
 ```
 
@@ -152,17 +159,17 @@ Production Readiness: N/6
 
 ```
 1. Modify code
-2. /contracts verify → Check existing contract violations
-3. /ripple           → Check blast radius
-4. /critic           → Check for new bugs after changes
+2. /immunity:contracts verify → Check existing contract violations
+3. /immunity:ripple           → Check blast radius
+4. /immunity:critic           → Check for new bugs after changes
 5. Commit
 ```
 
 ### For Code Review
 
 ```
-1. /critic src/      → Full adversarial review
-2. /prodlens src/    → Production perspective check
+1. /immunity:critic src/      → Full adversarial review
+2. /immunity:prodlens src/    → Production perspective check
 ```
 
 ---
@@ -178,10 +185,14 @@ git commit -m "Add immunity contracts for payment module"
 
 The entire team's AI agents will respect the same contracts.
 
-### /critic is most effective right after writing code
+### /immunity:critic is most effective right after writing code
 
-Code just written has the strongest author bias. Running /critic at this point provides the most value.
+Code just written has the strongest author bias. Running /immunity:critic at this point provides the most value.
 
 ### Store the "obvious" rules as contracts
 
 The things you think "everyone knows" are what break most often. Rules like "API responses always use the envelope format" are ideal contracts.
+
+### Trust [SCAN] findings more
+
+`[SCAN]` findings are deterministic — they come from Grep/Glob and are reproducible. `[REVIEW]` findings are LLM judgment — valuable but not guaranteed. When prioritizing fixes, start with `[SCAN]` findings.
