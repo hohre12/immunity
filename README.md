@@ -73,7 +73,9 @@ Critic: "The retry loop reuses the same transactionId.
         (doesn't know why → judges the code alone)
 ```
 
-This isn't a prompt trick. The sub-agent structurally does not have access to the parent conversation. The bias is architecturally eliminated.
+This isn't a prompt trick. The sub-agent is launched in a separate context and receives only file paths — no conversation history, no intent, no background. The bias is eliminated by what the sub-agent never receives.
+
+For detailed setup, see [Installation Guide](./docs/installation.md).
 
 ```
 /immunity:critic src/services/payment/charge.ts
