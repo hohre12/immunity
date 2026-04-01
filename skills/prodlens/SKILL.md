@@ -26,45 +26,71 @@ Before launching any sub-agent, perform these tool-based scans on the target fil
 
 #### 2a. Timeout & External Call Scan
 
-Use Grep on the target files for external call patterns WITHOUT timeout configuration:
+**Method: Grep to find candidates → Read with context to verify.**
 
 ```
-Grep patterns (in target scope):
-- "axios\.(get|post|put|delete|patch)\(" → then check if timeout is set nearby
-- "fetch\(" → check for AbortController or signal
-- "http\.(get|request)\(" → check for timeout option
-- "\.query\(|\.execute\(" → check for statement_timeout or lock_timeout
-```
+Step A — Grep to find candidate lines:
+- Grep for "axios\.(get|post|put|delete|patch)\(" in target scope
+- Grep for "fetch\(" in target scope
+- Grep for "http\.(get|request)\(" in target scope
+- Grep for "\.query\(|\.execute\(" in target scope
 
-Record each finding with file:line.
+Step B — For each match, Read the file with ±10 lines context and verify:
+- axios calls: Is there a timeout property in the config object?
+- fetch calls: Is there an AbortController or signal?
+- http calls: Is there a timeout option?
+- query/execute: Is there a statement_timeout or lock_timeout?
+
+Record confirmed findings (missing timeout) with file:line.
+```
 
 #### 2b. Error Handling Gap Scan
 
-Use Grep to find try/catch patterns and external calls:
-
 ```
-Grep patterns:
-- "await.*\.(post|get|put|delete|query|execute)\(" WITHOUT surrounding try/catch
-- "catch.*\{[^}]*\}" → check if catch block is empty or only logs
-- "\.then\(" without ".catch\("
+Step A — Grep to find candidate lines:
+- Grep for "await.*\.(post|get|put|delete|query|execute)\(" in target scope
+- Grep for "\.catch\(\s*\(\s*\)\s*=>" in target scope (empty catch)
+- Grep for "\.then\(" in target scope
+
+Step B — For each "await external call" match, Read the file with ±10 lines context and verify:
+- Is this await inside a try/catch block? If not → confirmed finding
+- For empty catch: Confirmed finding (no context needed)
+- For .then(): Is there a .catch() chained? If not → confirmed finding
+
+Record confirmed findings with file:line.
 ```
 
 #### 2c. Sensitive Data Exposure Scan
 
 ```
-Grep patterns:
-- "console\.(log|info|warn)\(.*password|token|secret|key|credential"
-- "res\.(json|send)\(.*error\.(message|stack)"
-- "process\.env\." in client-side code (check file path for /client/ or /public/)
+Step A — Grep to find candidate lines:
+- Grep for "console\.(log|info|warn)\(.*password|token|secret|key|credential" in target scope
+- Grep for "res\.(json|send)\(.*error\.(message|stack)" in target scope
+- Grep for "process\.env\." in target scope
+  with glob filter: --glob '**/client/**' --glob '**/public/**' --glob '**/src/pages/**' --glob '**/src/app/**'
+
+Step B — For process.env matches only, Read the file with ±3 lines to verify:
+- Is this in client-side code (browser-executed)? → confirmed finding
+- Is this in server-side code? → not a finding, skip
+
+Other patterns (console.log secrets, res.send error stack) are confirmed immediately.
+Record confirmed findings with file:line.
 ```
 
 #### 2d. Input Validation Scan
 
 ```
-Grep patterns:
-- "req\.(body|params|query)\." without preceding validation (joi, zod, yup, class-validator)
-- "parseInt\(|parseFloat\(" without isNaN check
-- "JSON\.parse\(" without try/catch
+Step A — Grep to find candidate lines:
+- Grep for "req\.(body|params|query)\." in target scope
+- Grep for "parseInt\(|parseFloat\(" in target scope
+- Grep for "JSON\.parse\(" in target scope
+
+Step B — For each match, Read the file with ±15 lines context and verify:
+- req.body/params/query: Is there a validation call before this line? (joi, zod, yup, class-validator, express-validator, Joi.validate, z.parse, schema.validate)
+- parseInt/parseFloat: Is the result checked with isNaN or Number.isFinite?
+- JSON.parse: Is it wrapped in try/catch?
+
+Record confirmed findings (unvalidated input) with file:line.
 ```
 
 #### 2e. Configuration File Scan

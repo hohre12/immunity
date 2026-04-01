@@ -28,33 +28,57 @@ Before launching the context-isolated sub-agent, perform quick tool-based scans.
 
 Use Grep on target files:
 
+**Method: Grep to find candidates → Read with context to verify.**
+
 ```
-Grep patterns:
-- "\.findUnique\(|\.findOne\(|\.findFirst\(" → check if result is null-checked before use
-- "\[0\]" after array operations → potential undefined access
-- "JSON\.parse\(" → check for try/catch
+Step A — Grep to find candidate lines:
+- Grep for "\.findUnique\(|\.findOne\(|\.findFirst\(" in target scope
+- Grep for "\[0\]" in target scope
+- Grep for "JSON\.parse\(" in target scope
+
+Step B — For each match, Read the file with ±5 lines context (offset/limit) and verify:
+- findUnique/findOne/findFirst: Is the result null-checked before property access?
+- [0]: Is the array guaranteed to be non-empty?
+- JSON.parse: Is it wrapped in try/catch?
+
+Record confirmed findings (not candidates) with file:line.
 ```
 
 #### 2b. Async/Error Handling Scan
 
 ```
-Grep patterns:
-- "await " without surrounding try/catch (check context)
-- "new Promise\(" → check for reject handling
-- "\.catch\(\s*\(\s*\)\s*=>" → empty catch (swallowed errors)
+Step A — Grep to find candidate lines:
+- Grep for "await\s+" in target scope → collect all file:line matches
+- Grep for "new Promise\(" in target scope
+- Grep for "\.catch\(\s*\(\s*\)\s*=>" in target scope (empty catch)
+
+Step B — For each "await" match, Read the file with ±10 lines context and verify:
+- Is this await inside a try/catch block? If not → finding
+- For new Promise: Is there a reject path?
+- For empty catch: Confirmed finding (no context needed)
+
+Record confirmed findings with file:line.
 ```
 
 #### 2c. Security Quick Scan
 
 ```
-Grep patterns:
-- "\$\{.*req\.(body|params|query)" → potential SQL injection via template literals
-- "innerHTML\s*=" → potential XSS
-- "eval\(|Function\(" → dangerous eval
-- "password|secret|token|api.?key" in non-env/non-config files → potential hardcoded secrets
+Step A — Grep to find candidate lines:
+- Grep for "\$\{.*req\.(body|params|query)" in target scope → SQL injection candidate
+- Grep for "innerHTML\s*=" in target scope → XSS candidate
+- Grep for "eval\(|Function\(" in target scope → dangerous eval (confirmed immediately)
+- Grep for "password|secret|token|api.?key" in target scope
+  with glob exclusion: --glob '!*.env*' --glob '!*config*' --glob '!*.lock' --glob '!*.md'
+  → hardcoded secret candidate
+
+Step B — For password/secret/token matches, Read the file with ±3 lines context and verify:
+- Is this a variable assignment with a literal value? → confirmed finding
+- Is this a reference to an env variable or config? → not a finding, skip
+
+Record confirmed findings with file:line.
 ```
 
-Collect findings as a list with file:line references.
+Collect all confirmed findings as a structured list.
 
 ### Step 3: Launch Sub-Agent (Critical — Context Isolation)
 

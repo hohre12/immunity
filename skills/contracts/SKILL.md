@@ -104,8 +104,9 @@ checks:
     pattern: "idempotencyKey|idempotency_key|IdempotencyKey"
     in: "src/services/payment/**"
   - type: pattern_absent
-    pattern: "charge\\(.*\\)(?!.*idempotency)"
+    pattern: "charge\\(.*\\)"
     in: "src/services/payment/**"
+    exclude_if_also_matches: "idempotency"
 created_by: "claude-session"
 created_at: "ISO-8601-date"
 ```
@@ -119,7 +120,7 @@ Use these check types when generating contracts. **All are deterministic — no 
 | Type | Description | Tool used | Fields |
 |------|-------------|-----------|--------|
 | `pattern_present` | Pattern MUST exist in scope | Grep | `pattern`, `in` |
-| `pattern_absent` | Pattern must NOT exist in scope | Grep | `pattern`, `in` |
+| `pattern_absent` | Pattern must NOT exist in scope (use simple patterns only — no lookahead) | Grep | `pattern`, `in`, optional `exclude_if_also_matches` |
 | `test_pass` | Test command must pass | Bash | `command` |
 | `file_exists` | File must exist | Glob | `path` |
 | `command_success` | Command must exit 0 | Bash | `command` |
@@ -135,7 +136,7 @@ When the user runs `/contracts verify`:
 2. Read each contract file
 3. For each contract, execute its checks:
    - `pattern_present` → Use Grep to search for the pattern in the scope. If Grep returns results, the check passes. If no results, it fails.
-   - `pattern_absent` → Use Grep to search for the pattern in the scope. If Grep returns NO results, the check passes. If results found, it fails — report the file:line where the pattern was found.
+   - `pattern_absent` → Use Grep to search for the pattern in the scope. If Grep returns NO results, the check passes. If results found AND `exclude_if_also_matches` is set, Grep again for the exclusion pattern on the same files — if the exclusion pattern is also present on that line, the match is exempt. Otherwise, it fails — report the file:line where the pattern was found. **Use simple regex only. Do NOT use lookahead (?!...) or lookbehind (?<!...) — ripgrep's default engine does not support these.**
    - `test_pass` → Use Bash to run the test command. Exit code 0 = pass, non-zero = fail.
    - `file_exists` → Use Glob to check if the file exists. Found = pass, not found = fail.
    - `command_success` → Use Bash to run the command. Exit code 0 = pass, non-zero = fail.
