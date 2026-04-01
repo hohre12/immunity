@@ -1,41 +1,49 @@
 # Immunity
 
-**The immune system for AI-generated code.** Remember. Detect. Strengthen.
+**AI agents can't reliably verify their own work.** Immunity fixes that.
 
 [한국어](./README.ko.md)
 
 ---
 
-## What is Immunity?
+## The Problem
 
-When AI agents write code, three problems keep recurring:
+AI agents write code fast. But they're bad at catching their own mistakes.
 
-1. **Memory loss** — Decisions made in session A are unknown to the agent in session B
-2. **Self-confirmation bias** — The agent that wrote the code can't truly critique its own work
-3. **Production blindness** — Agents build code that "works" but won't survive production
+Ask the same agent to review code it just wrote, and it says "looks good" — because it already knows *why* it wrote it that way. This isn't a prompting problem. It's a structural one.
 
-Immunity solves these with **4 independent skills**:
+This manifests in 4 ways:
 
-| Skill | Problem it solves | Biological analogy |
-|-------|-------------------|-------------------|
-| `/contracts` | Agent memory | Immune memory — remembers past pathogens |
-| `/critic` | Critical verification | Immune response — detects and attacks anomalies |
-| `/ripple` | Chain verification | Immune propagation — traces infection paths |
-| `/prodlens` | Production hardening | Immune adaptation — builds stronger antibodies |
+| Symptom | What happens |
+|---------|-------------|
+| **Self-confirmation bias** | Agent can't objectively critique code it just created |
+| **Memory loss** | Decisions from session A are unknown in session B |
+| **Tunnel vision** | Agent fixes one file without checking what else is affected |
+| **Missing perspective** | Code "works" but isn't production-ready |
 
-Each works independently. Install one or all four.
+## The Fix
+
+Immunity provides 4 skills, each targeting one symptom:
+
+```
+/immunity:critic     → Separate agent reviews code without knowing why it was written
+/immunity:contracts  → Important decisions persist as verifiable rules across sessions
+/immunity:ripple     → Changes are traced to find everything else that's affected
+/immunity:prodlens   → Code is analyzed from a production operations perspective
+```
+
+`/critic` is the most impactful — try it first.
 
 ---
 
 ## Installation
 
-```bash
-# Add the marketplace and install
+```
 /plugin marketplace add hohre12/immunity
 /plugin install immunity@hohre12-immunity
 ```
 
-Or install from local directory for development:
+Or for local development:
 
 ```bash
 git clone https://github.com/hohre12/immunity.git
@@ -46,47 +54,69 @@ claude --plugin-dir ./immunity
 
 ---
 
-## Quick Start
+## /critic — Adversarial Code Review
 
-### Get an adversarial code review
+The core skill. **Context isolation** is the mechanism.
 
-```
-/critic src/services/payment/charge.ts
-```
-
-An independent agent finds bugs you missed — in 30 seconds.
-
-### Remember important decisions
+When you ask the same agent to review its own code:
 
 ```
-/contracts src/services/payment/
+Agent: "This code handles the user's requirements well."
+       (knows why it was built → rationalizes)
 ```
 
-Decisions like "payments must be idempotent" become verifiable contracts. The next session's agent that violates this contract gets caught automatically.
-
-### Check the blast radius of a change
+When `/critic` launches a separate sub-agent with code only:
 
 ```
-/ripple src/services/UserService.ts
+Critic: "The retry loop reuses the same transactionId.
+         PG may reject it as a duplicate."
+        (doesn't know why → judges the code alone)
 ```
 
-Automatically finds what else needs to be checked when you change UserService.
-
-### Check production readiness
+This isn't a prompt trick. The sub-agent structurally does not have access to the parent conversation. The bias is architecturally eliminated.
 
 ```
-/prodlens src/services/payment/
+/immunity:critic src/services/payment/charge.ts
 ```
 
-Concurrency, error recovery, observability, security — concrete gaps from a production perspective.
+30 seconds later, you get a report with only high-confidence findings:
+
+```
+── Critic Report ──
+
+Critical (fix immediately)
+┌─────────────────────────────────────────────┐
+│ [BUG] charge.ts:47                          │
+│ Retry reuses same transactionId.            │
+│ Fix: Generate new transactionId per retry   │
+└─────────────────────────────────────────────┘
+
+Warning (review recommended)
+┌─────────────────────────────────────────────┐
+│ [PRODUCTION] charge.ts:23                   │
+│ No timeout on external PG API call.         │
+│ Fix: Set axios timeout to 5000ms            │
+└─────────────────────────────────────────────┘
+
+Score: critical 1 / warning 1
+```
+
+Reporting criteria:
+- Only `certain` (95%+) or `likely` (75-95%) confidence
+- No code style, naming, or comment preferences
+- If unsure, don't report — one false positive destroys trust
 
 ---
 
-## How It Works
-
-### /contracts — Self-Verifying Agent Memory
+## /contracts — Self-Verifying Agent Memory
 
 Writing "please do X" in CLAUDE.md is a **request**. A contract **catches violations**.
+
+```
+/immunity:contracts src/services/payment/
+```
+
+Claude analyzes the code and proposes contracts. You choose which to keep:
 
 ```yaml
 # .contracts/payment-idempotency.yml
@@ -100,25 +130,17 @@ checks:
     in: "src/services/payment/**"
 ```
 
-When an agent modifies files in scope, hooks automatically check related contracts.
+Next session, a different agent modifies payment code → contract violation detected → immediate alert.
 
-### /critic — Adversarial Code Review
+Commit `.contracts/` to git and the whole team's agents respect the same rules.
 
-The key is **context isolation**.
+---
+
+## /ripple — Change Impact Chain Verification
 
 ```
-Current Claude              →   Code ONLY   →   Critic sub-agent
-(knows why it was built)        (reason blocked)   (judges code alone)
+/immunity:ripple src/services/UserService.ts
 ```
-
-Because the critic doesn't know why the code was written, the bias of "the user wanted this, so it must be fine" is structurally impossible.
-
-**Reporting criteria:**
-- Only `certain` (95%+) or `likely` (75-95%) confidence
-- No code style, naming, or comment preferences
-- If unsure, don't report — one false positive destroys trust
-
-### /ripple — Change Impact Chain Verification
 
 Import graphs aren't enough. They miss code using the same patterns.
 
@@ -129,11 +151,17 @@ UserService.update() changed
 └── Contract: user-data-integrity (needs re-verification)
 ```
 
-Claude reads code and identifies patterns. Not perfect, but far better than checking nothing.
+Heuristic, not precise — but far better than checking nothing.
 
-### /prodlens — Production Readiness Lens
+---
 
-Analyzes across 6 fixed axes:
+## /prodlens — Production Readiness Lens
+
+```
+/immunity:prodlens src/services/payment/
+```
+
+6 fixed axes from a production operations perspective:
 
 | Axis | What it checks |
 |------|---------------|
@@ -144,25 +172,29 @@ Analyzes across 6 fixed axes:
 | Rate Limiting | External API limits, user request limits |
 | Input Validation | Boundary values, types, sizes |
 
+```
+Production Readiness: 4/6
+```
+
 ---
 
 ## Before / After
 
-**Before (without Immunity):**
+**Before:**
 
 ```
 Session 1: Claude writes payment logic. Includes idempotency key.
-Session 2: Different Claude modifies payment logic. Removes idempotency key. Nobody notices.
+Session 2: Different Claude modifies it. Removes idempotency key. Nobody notices.
 Session 3: "Review this" → "Well-written code." (self-confirmation bias)
 Session 4: Deploy. Duplicate payments. Incident.
 ```
 
-**After (with Immunity):**
+**After:**
 
 ```
 Session 1: Claude writes payment logic. /contracts → idempotency contract created.
-Session 2: Different Claude tries to modify → contract violation detected → immediate alert.
-Session 2: /critic → finds "missing timeout". /ripple → "check OrderService too" alert.
+Session 2: Different Claude tries to modify → contract violation detected.
+Session 2: /critic → finds "missing timeout". /ripple → "check OrderService too".
 Session 2: /prodlens → production readiness 4/6 → fixes 2 gaps.
 Session 3: Deploy. No incidents.
 ```
@@ -171,24 +203,22 @@ Session 3: Deploy. No incidents.
 
 ## Design Principles
 
-1. **File-system based** — No DB, no servers. `.contracts/` directory and skill files are everything
-2. **Protocol first** — Optimized for Claude Code, but the convention works with any AI agent
-3. **Incremental adoption** — Value from just one skill
-4. **Git-friendly** — Commit `.contracts/` and the whole team shares them
-5. **Minimize false positives** — If unsure, don't report
+1. **File-system based** — No DB, no servers. `.contracts/` and markdown files are everything
+2. **Incremental adoption** — `/critic` alone provides value. Add more skills as needed
+3. **Git-friendly** — Commit `.contracts/` and the whole team shares them
+4. **Minimize false positives** — If unsure, don't report
+5. **Protocol first** — Optimized for Claude Code, but the convention works with any AI agent
 
 ---
 
 ## Limitations
 
-Honest limitations:
-
 - **Depends on Claude's judgment.** If Claude misses it, the tool misses it.
-- **Uses more API tokens.** Each skill reads and analyzes code, consuming tokens.
-- **Not runtime verification.** `/prodlens` is code-review level, not an actual load test.
-- **`/ripple` behavioral analysis isn't perfect.** Pattern-based heuristics, not precise AST analysis.
+- **Uses more API tokens.** Each skill reads and analyzes code.
+- **Not runtime verification.** `/prodlens` is code review, not a load test.
+- **`/ripple` is heuristic.** Pattern-based, not precise AST analysis.
 
-These are limitations of AI code review as a category, not just this tool. Immunity structures the maximum value possible within these constraints.
+These are limitations of AI code review as a category. Immunity structures the maximum value possible within these constraints.
 
 ---
 
