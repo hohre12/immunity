@@ -31,7 +31,7 @@ Before launching any sub-agent, perform these tool-based scans on the target fil
 ```
 Step A — Grep to find candidate lines:
 - Grep for "axios\.(get|post|put|delete|patch)\(" in target scope
-- Grep for "fetch\(" in target scope
+- Grep for "\bfetch\(" in target scope (word boundary to avoid matching prefetch, refetch, etc.)
 - Grep for "http\.(get|request)\(" in target scope
 - Grep for "\.query\(|\.execute\(" in target scope
 
@@ -66,14 +66,15 @@ Record confirmed findings with file:line.
 Step A — Grep to find candidate lines:
 - Grep for "console\.(log|info|warn)\(.*password|token|secret|key|credential" in target scope
 - Grep for "res\.(json|send)\(.*error\.(message|stack)" in target scope
-- Grep for "process\.env\." in target scope
-  with glob filter: --glob '**/client/**' --glob '**/public/**' --glob '**/src/pages/**' --glob '**/src/app/**'
+- Grep for "process\.env\." in target scope (no glob filter — search everywhere)
 
-Step B — For process.env matches only, Read the file with ±3 lines to verify:
-- Is this in client-side code (browser-executed)? → confirmed finding
-- Is this in server-side code? → not a finding, skip
+Step B — Verify each match:
+- For console.log secrets and res.send error stack: Confirmed finding immediately (no context check needed).
+- For process.env matches: Read the file with ±3 lines to verify. Check the file path:
+  - File is in a client-side directory (client/, public/, src/pages/, src/app/, src/components/, or any directory with browser-executed code)? → confirmed finding
+  - File is in a server-only directory (server/, api/, src/services/, src/middleware/, scripts/)? → not a finding, skip
+  - Uncertain? → Read the file imports — if it imports React, next/router, or other client libraries → confirmed finding
 
-Other patterns (console.log secrets, res.send error stack) are confirmed immediately.
 Record confirmed findings with file:line.
 ```
 

@@ -23,7 +23,7 @@ When the user runs `/contracts`, check the arguments:
 - `/contracts verify <contract-name>` — Verify a specific contract
 - `/contracts list` — List all contracts
 - `/contracts remove <contract-name>` — Remove a contract
-- `/contracts add "<assertion>" --scope "<glob>"` — Create a contract from natural language
+- `/contracts add "<assertion>" --scope "<glob>"` — Create a contract directly from natural language (go to Add Flow)
 - `/contracts` (no args) — Analyze recent git changes and propose contracts. If no changes found, ask the user for a path.
 
 ### Step 1.5: Ensure .contracts/ Directory Exists
@@ -113,6 +113,19 @@ created_at: "ISO-8601-date"
 
 Write the file to `.contracts/<contract-name>.yml` and update `.contracts/CONTRACTS.md` index.
 
+### Add Flow (for `/contracts add`)
+
+When the user runs `/contracts add "<assertion>" --scope "<glob>"`:
+
+1. **Skip Steps 2a and 2b entirely.** The user is explicitly defining the contract — no code analysis needed.
+2. Convert the assertion into a contract name (kebab-case, derived from key words).
+3. Determine the appropriate check type:
+   - If the assertion mentions something that "must exist" or "must include" → `pattern_present`. Ask the user: "What pattern should I look for? (e.g., `idempotencyKey`)"
+   - If the assertion mentions something that "must not" or "should never" → `pattern_absent`. Ask the user for the pattern.
+   - If unsure which check type fits → ask the user.
+4. Generate the YAML file and write to `.contracts/`.
+5. Update `.contracts/CONTRACTS.md` index.
+
 ### Check Types
 
 Use these check types when generating contracts. **All are deterministic — no LLM needed for verification.**
@@ -132,11 +145,18 @@ When the user runs `/contracts verify`:
 
 **This is entirely deterministic. Execute each check using the specified tool. No LLM judgment needed.**
 
-1. Use Glob to find all `.contracts/*.yml` files
+**Filtering:**
+- `/contracts verify` (no args) → verify ALL contracts
+- `/contracts verify <path>` → verify only contracts whose `scope` field matches the given path. Read each contract's scope and skip contracts that don't include the path.
+- `/contracts verify <contract-name>` → verify only `.contracts/<contract-name>.yml`. If the file doesn't exist, report "Contract not found: <contract-name>"
+
+**Execution:**
+
+1. Use Glob to find `.contracts/*.yml` files (apply filter above)
 2. Read each contract file
 3. For each contract, execute its checks:
    - `pattern_present` → Use Grep to search for the pattern in the scope. If Grep returns results, the check passes. If no results, it fails.
-   - `pattern_absent` → Use Grep to search for the pattern in the scope. If Grep returns NO results, the check passes. If results found AND `exclude_if_also_matches` is set, Grep again for the exclusion pattern on the same files — if the exclusion pattern is also present on that line, the match is exempt. Otherwise, it fails — report the file:line where the pattern was found. **Use simple regex only. Do NOT use lookahead (?!...) or lookbehind (?<!...) — ripgrep's default engine does not support these.**
+   - `pattern_absent` → Use Grep with `-n` (line numbers) to search for the pattern in the scope. If Grep returns NO results, the check passes. If results found AND `exclude_if_also_matches` is set, for each matching line: use Read to read that specific line (offset=line_number, limit=1), then check if the exclusion pattern appears in that line's content. If it does, the match is exempt (skip it). If any non-exempt matches remain, the check fails — report the file:line. **Use simple regex only. Do NOT use lookahead (?!...) or lookbehind (?<!...) — ripgrep's default engine does not support these.**
    - `test_pass` → Use Bash to run the test command. Exit code 0 = pass, non-zero = fail.
    - `file_exists` → Use Glob to check if the file exists. Found = pass, not found = fail.
    - `command_success` → Use Bash to run the command. Exit code 0 = pass, non-zero = fail.
