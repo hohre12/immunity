@@ -149,6 +149,9 @@ Merge the deterministic scan results (Direct, Tests, Contracts) with the sub-age
 ```
 ── Ripple Map ──
 
+[SCAN]   = Found by Grep/Glob scan. Reproducible.
+[REVIEW] = Found by LLM behavioral pattern analysis. Judgment-based.
+
 src/services/UserService.ts (changed)
 │
 ├── Direct (import/call relationships) [SCAN]

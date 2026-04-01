@@ -98,7 +98,19 @@ Record confirmed findings (unvalidated input) with file:line.
 Use Glob to find config files, then Read them:
 
 ```
-Glob: "**/database.{ts,js,json}", "**/config.{ts,js,json}", "**/.env.example", "**/docker-compose.{yml,yaml}"
+Glob patterns (check all that exist):
+- "**/database.{ts,js,json}"
+- "**/config.{ts,js,json}"
+- "**/.env.example"
+- "**/docker-compose.{yml,yaml}"
+- "**/ormconfig.{ts,js,json}"
+- "**/knexfile.{ts,js}"
+- "**/prisma/schema.prisma"
+- "**/drizzle.config.{ts,js}"
+- "**/mikro-orm.config.{ts,js}"
+- "**/typeorm.config.{ts,js}"
+- "**/sequelize.config.{ts,js,json}"
+- "**/nest-cli.json"
 Check for:
 - Connection pool size settings
 - Timeout configurations
@@ -219,6 +231,9 @@ Format the sub-agent's results and show them to the user:
 
 ```
 ── Production Lens ──
+
+[SCAN]   = Found by Grep scan + Read context verification. Reproducible.
+[REVIEW] = Found by LLM production analysis. Judgment-based.
 
 Concurrency                               ✗ FAIL
 │ [SCAN] charge.ts:34 — No transaction isolation level set.

@@ -201,6 +201,9 @@ Format the sub-agent's results and show them to the user:
 ```
 ── Critic Report ──
 
+[SCAN]   = Found by Grep scan + Read context verification. Reproducible.
+[REVIEW] = Found by independent LLM code review. Judgment-based.
+
 Critical (fix immediately)
 ┌─────────────────────────────────────────────┐
 │ [BUG] [SCAN] charge.ts:48                  │
