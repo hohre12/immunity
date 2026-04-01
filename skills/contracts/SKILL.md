@@ -30,7 +30,7 @@ When the user runs `/contracts`, check the arguments:
 
 Before any operation (create, verify, list, remove), check if `.contracts/` exists in the project root. If it doesn't:
 
-- For **create/add**: Create `.contracts/` directory and an empty `CONTRACTS.md` index file inside it.
+- For **create/add**: Create `.contracts/` directory and an empty `CONTRACTS.md` index file inside it. Inform the user: "Created `.contracts/` directory. This is where your contracts will be stored. You can commit this directory to git so your team's agents share the same rules."
 - For **verify/list**: Report "No contracts found. Run `/immunity:contracts <path>` to create your first contract."
 - For **remove**: Report "No contracts found."
 

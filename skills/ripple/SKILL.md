@@ -171,6 +171,8 @@ src/services/UserService.ts (changed)
 Direct: 3 / Behavioral: 2 / Contract: 1
 
 Run chain verification?
+(This will read each affected file and check: are direct dependents still compatible?
+ Do behavioral matches need the same change applied? Do related contracts still pass?)
 ```
 
 ### Step 5: Chain Verification (if user agrees)

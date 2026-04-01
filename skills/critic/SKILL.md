@@ -16,7 +16,7 @@ When the user runs `/critic`, check the arguments:
 
 - **If a file/directory path is provided**: Set that path as the review target
 - **If no arguments**: Run `git diff HEAD` and `git diff --cached` to get recently changed files as review targets
-- **If no changes found**: Ask the user for a target path
+- **If no changes found**: Say "No recent changes detected. Which file or directory would you like me to review? For example: `/immunity:critic src/services/`" and wait for the user's response
 
 Once you have the file path list, proceed to Step 2.
 
