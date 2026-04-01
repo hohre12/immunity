@@ -222,6 +222,24 @@ These are limitations of AI code review as a category. Immunity structures the m
 
 ---
 
+## On Critical Feedback
+
+No project in the world is perfect. Any project, when evaluated from a critical perspective, will have gaps. This is true for Immunity too.
+
+When you receive a critical review — whether from `/immunity:critic`, a peer, or an AI — **you must evaluate the feedback, not just accept it.**
+
+A critic's job is to find problems. It will always find something. But not every finding warrants action. Some findings conflict with your project's core identity. Some optimize for concerns that don't matter in your context. Some are technically correct but strategically wrong.
+
+**The owner of the project must be the final judge.** Read the critique, understand it, then decide:
+
+- Does this finding align with what this project is trying to be?
+- Does fixing this make the project better at its core purpose, or does it dilute it?
+- Is this a real risk, or a theoretical concern that doesn't apply here?
+
+Immunity exists to help you find problems. It does not exist to make decisions for you. The immune system detects threats — but the body decides how to respond.
+
+---
+
 ## License
 
 MIT
