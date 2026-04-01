@@ -2,56 +2,60 @@
 
 ## Installation
 
-### Method 1: Full install
+### Method 1: Plugin install (recommended)
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/hohre12/immunity.git /tmp/immunity
+In Claude Code, run:
 
-# 2. Copy skill files
-cp /tmp/immunity/skills/*.md .claude/skills/
-
-# 3. Copy agent files
-cp /tmp/immunity/agents/*.md .claude/agents/
-
-# 4. (Optional) Hook setup — auto contract verification
-# Add hooks to .claude/settings.json
+```
+/plugin marketplace add hohre12/immunity
+/plugin install immunity@hohre12-immunity
 ```
 
-### Method 2: Individual skills only
+This registers the marketplace and installs all 4 skills + agents automatically.
 
-Install only the skills you want:
+### Method 2: Local development / testing
 
 ```bash
-# /critic only
-cp /tmp/immunity/skills/critic.md .claude/skills/
+git clone https://github.com/hohre12/immunity.git
+claude --plugin-dir ./immunity
+```
 
-# /contracts only
-cp /tmp/immunity/skills/contracts.md .claude/skills/
+### Method 3: Manual file copy (fallback)
 
-# /prodlens only
-cp /tmp/immunity/skills/prodlens.md .claude/skills/
+```bash
+git clone https://github.com/hohre12/immunity.git /tmp/immunity
 
-# /ripple only
-cp /tmp/immunity/skills/ripple.md .claude/skills/
+# Copy skill directories
+cp -r /tmp/immunity/skills/critic/ .claude/skills/critic/
+cp -r /tmp/immunity/skills/contracts/ .claude/skills/contracts/
+cp -r /tmp/immunity/skills/ripple/ .claude/skills/ripple/
+cp -r /tmp/immunity/skills/prodlens/ .claude/skills/prodlens/
+
+# Copy agent files
+cp /tmp/immunity/agents/*.md .claude/agents/
 ```
 
 ## Verify Installation
 
 ```
-# In Claude Code, simply run any skill:
-User: /critic
-→ If prompted for a review target or the skill starts analyzing, installation succeeded
+# In Claude Code, run any skill:
+/immunity:critic
+→ If prompted for a review target or starts analyzing, installation succeeded
 
-User: /contracts list
+/immunity:contracts list
 → If it reports "no contracts found" or shows existing contracts, installation succeeded
 ```
 
 ## Hook Setup (Optional)
 
-To enable automatic contract verification, add hooks to your settings.
+To get reminders about contract verification when files are modified, copy the hook template:
 
-Add to `.claude/settings.json`:
+```bash
+# View the hook template
+cat /tmp/immunity/hooks/immunity-hooks.json
+```
+
+Then add the hook configuration to your `.claude/settings.json`:
 
 ```jsonc
 {
@@ -59,21 +63,21 @@ Add to `.claude/settings.json`:
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "sh -c 'if [ -d .contracts ]; then echo \"[immunity] Contracts exist in this project. Consider running /contracts verify to check for violations.\"; fi'"
+        "command": "sh -c 'if [ -d .contracts ]; then echo \"[immunity] Contracts exist in this project. Consider running /immunity:contracts verify to check for violations.\"; fi'"
       }
     ]
   }
 }
 ```
 
-This hook is a **reminder**, not automatic enforcement. When files are modified and `.contracts/` exists, it prompts the agent to consider running `/contracts verify`. For full enforcement, run `/contracts verify` manually before commits.
+This is a **reminder**, not automatic enforcement. When files are modified and `.contracts/` exists, it prompts the agent to consider running `/immunity:contracts verify`.
 
-## Project vs Global Install
+## Plugin vs Manual Install
 
-| Install location | Effect | Recommended for |
-|-----------------|--------|----------------|
-| Project `.claude/` | Available in this project only | Team projects (can git commit) |
-| Global `~/.claude/` | Available in all projects | Individual developers |
+| Method | Skills invoked as | Best for |
+|--------|------------------|----------|
+| Plugin install | `/immunity:critic` | Most users |
+| Manual copy | `/critic` | Customization, forking |
 
 ## Dependencies
 
@@ -88,26 +92,31 @@ Just markdown files. If Claude Code is installed, you're ready to go.
 
 ## Update
 
-```bash
+```
+# Plugin install
+/plugin uninstall immunity@hohre12-immunity
+/plugin install immunity@hohre12-immunity
+
+# Manual install
 cd /tmp/immunity && git pull
-cp skills/*.md /path/to/project/.claude/skills/
+cp -r skills/*/ /path/to/project/.claude/skills/
 cp agents/*.md /path/to/project/.claude/agents/
 ```
 
 ## Uninstall
 
-```bash
-# Remove skill files
-rm .claude/skills/contracts.md
-rm .claude/skills/critic.md
-rm .claude/skills/ripple.md
-rm .claude/skills/prodlens.md
+```
+# Plugin install
+/plugin uninstall immunity@hohre12-immunity
 
-# (Optional) Remove contract data
-rm -rf .contracts/
-
-# (Optional) Remove hook settings
-# Remove immunity-related hooks from .claude/settings.json
+# Manual install
+rm -rf .claude/skills/critic/
+rm -rf .claude/skills/contracts/
+rm -rf .claude/skills/ripple/
+rm -rf .claude/skills/prodlens/
+rm .claude/agents/critic-reviewer.md
+rm .claude/agents/prod-reviewer.md
+rm .claude/agents/ripple-tracer.md
 ```
 
-Contract data (`.contracts/`) is independent of the skills. Removing skills doesn't affect contract data. Reinstall later and existing contracts will work as before.
+Contract data (`.contracts/`) is independent of the plugin. Removing the plugin doesn't affect contract data. Reinstall later and existing contracts will work as before.

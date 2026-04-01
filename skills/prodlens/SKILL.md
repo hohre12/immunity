@@ -115,6 +115,8 @@ Agent tool settings:
 - `subagent_type`: `"feature-dev:code-reviewer"`
 - `description`: `"prodlens production review"`
 
+The agent definition in `agents/prod-reviewer.md` provides the reviewer's role and rules. The inline prompt template above should be used as the sub-agent's instructions — it contains the complete 6-axis analysis criteria and output format.
+
 ### Step 3: Output Production Report
 
 Format the sub-agent's results and show them to the user:

@@ -24,6 +24,14 @@ When the user runs `/contracts`, check the arguments:
 - `/contracts add "<assertion>" --scope "<glob>"` — Create a contract from natural language
 - `/contracts` (no args) — Analyze recent git changes and propose contracts. If no changes found, ask the user for a path.
 
+### Step 1.5: Ensure .contracts/ Directory Exists
+
+Before any operation (create, verify, list, remove), check if `.contracts/` exists in the project root. If it doesn't:
+
+- For **create/add**: Create `.contracts/` directory and an empty `CONTRACTS.md` index file inside it.
+- For **verify/list**: Report "No contracts found. Run `/immunity:contracts <path>` to create your first contract."
+- For **remove**: Report "No contracts found."
+
 ### Step 2: Create Contracts (default flow)
 
 **Resolving target files:**

@@ -95,6 +95,8 @@ Agent tool settings:
 - `subagent_type`: `"Explore"`
 - `description`: `"ripple impact analysis"`
 
+The agent definition in `agents/ripple-tracer.md` provides the tracer's role and rules. The inline prompt template above should be used as the sub-agent's instructions — it contains the complete impact analysis criteria and output format.
+
 ### Step 4: Output Ripple Map
 
 Format the sub-agent's results and show them to the user:

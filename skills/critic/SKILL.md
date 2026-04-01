@@ -123,6 +123,8 @@ Agent tool settings:
 - `subagent_type`: `"feature-dev:code-reviewer"`
 - `description`: `"critic adversarial review"`
 
+The agent definition in `agents/critic-reviewer.md` provides the reviewer's role and rules. The inline prompt template above should be used as the sub-agent's instructions — it contains the complete review criteria and output format.
+
 ### Step 3: Output Report
 
 Format the sub-agent's results and show them to the user:
