@@ -81,7 +81,7 @@ For detailed setup, see [Installation Guide](./docs/installation.md).
 /immunity:critic src/services/payment/charge.ts
 ```
 
-30 seconds later, you get a report with only high-confidence findings:
+The sub-agent runs its review and returns only high-confidence findings:
 
 ```
 ── Critic Report ──

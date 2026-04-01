@@ -81,7 +81,7 @@ Critic: "retry 루프에서 동일한 transactionId를 재사용합니다.
 /immunity:critic src/services/payment/charge.ts
 ```
 
-30초 후, 높은 신뢰도의 발견만 포함된 리포트를 받습니다:
+서브에이전트가 리뷰를 실행하고, 높은 신뢰도의 발견만 포함된 리포트를 반환합니다:
 
 ```
 ── Critic Report ──
