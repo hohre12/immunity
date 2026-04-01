@@ -17,5 +17,6 @@
     "adversarial-review"
   ],
   "skills": "./skills/",
-  "agents": "./agents/"
+  "agents": "./agents/",
+  "hooks": "./hooks/immunity-hooks.json"
 }

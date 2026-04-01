@@ -124,7 +124,7 @@ Use these check types when generating contracts. **All are deterministic — no 
 | `test_pass` | Test command must pass | Bash | `command` |
 | `file_exists` | File must exist | Glob | `path` |
 | `command_success` | Command must exit 0 | Bash | `command` |
-| `json_match` | JSON/YAML field must match condition | Read | `path`, `field`, `condition` |
+| `json_match` | JSON/YAML field must match condition | Read + Bash | `path`, `field`, `operator`, `value` |
 
 ### Verify Flow
 
@@ -140,7 +140,16 @@ When the user runs `/contracts verify`:
    - `test_pass` → Use Bash to run the test command. Exit code 0 = pass, non-zero = fail.
    - `file_exists` → Use Glob to check if the file exists. Found = pass, not found = fail.
    - `command_success` → Use Bash to run the command. Exit code 0 = pass, non-zero = fail.
-   - `json_match` → Use Read to open the file, extract the field, check the condition.
+   - `json_match` → Use Read to open the file, extract the field value using dot notation (e.g., `dependencies.axios`). Then apply the operator: `exists` (field is present), `equals` (field === value), `contains` (field includes value as substring), `gte` (field >= value, numeric), `lte` (field <= value, numeric). All operators are deterministic — no LLM interpretation needed.
+
+**json_match operators:**
+| Operator | Passes when | Example |
+|----------|------------|---------|
+| `exists` | Field is present in the file | `field: "scripts.test", operator: "exists"` |
+| `equals` | Field value === value | `field: "engine.node", operator: "equals", value: ">=18"` |
+| `contains` | Field value includes value as substring | `field: "scripts.test", operator: "contains", value: "jest"` |
+| `gte` | Field value >= value (numeric) | `field: "pool.max", operator: "gte", value: 5` |
+| `lte` | Field value <= value (numeric) | `field: "pool.max", operator: "lte", value: 100` |
 
 4. Output results:
 
