@@ -45,35 +45,48 @@ my-project/
 └──────────────┬───────────────────────────────────────────────┘
                │
 ┌──────────────▼───────────────────────────────────────────────┐
-│  Skill: critic.md                                            │
-│  Role: Identify review targets, launch sub-agent, format     │
-│  Tools: Agent (sub-agent launch), Bash (git diff)            │
+│  Skill: SKILL.md (Phase 1 — deterministic scan)              │
+│  Main agent runs Grep + Read to find anti-patterns           │
+│  Produces [SCAN] findings                                    │
 └──────────────┬───────────────────────────────────────────────┘
-               │ Agent tool call (code only, context blocked)
+               │
 ┌──────────────▼───────────────────────────────────────────────┐
-│  Agent: critic-reviewer                                      │
-│  Role: Judge code only, find defects                         │
-│  Tools: Read, Grep, Glob (read-only)                         │
-│  Output: Structured findings                                 │
+│  Skill: SKILL.md (Phase 2 — sub-agent launch)                │
+│  Passes: file paths + [SCAN] findings (context blocked)      │
+│  Contains: complete prompt template for the sub-agent        │
+└──────────────┬───────────────────────────────────────────────┘
+               │ Agent tool call
+┌──────────────▼───────────────────────────────────────────────┐
+│  Agent: critic-reviewer.md                                   │
+│  Defines: role + constraints (what to do, what NOT to do)    │
+│  Does NOT define: review criteria, output format             │
+│  (those come from the SKILL.md prompt template)              │
 └──────────────┬───────────────────────────────────────────────┘
                │ Results returned
 ┌──────────────▼───────────────────────────────────────────────┐
-│  Skill: critic.md (result handling)                          │
-│  → Show formatted report to user                            │
+│  Skill: SKILL.md (Phase 3 — report)                          │
+│  → Merge [SCAN] + [REVIEW] findings                         │
+│  → Show formatted report with legend                        │
 │  → "Fix critical issues?"                                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Skill-to-agent mapping:
+Skill-to-agent responsibility split:
 
-| Skill | Agent | Agent role |
+| | SKILL.md | Agent .md |
+|---|----------|----------|
+| **Defines** | Full execution flow, scan patterns, prompt template, output format | Role identity, constraints, what NOT to do |
+| **Source of truth for** | Review criteria, perspectives, output format | Behavioral guardrails |
+| **Updated when** | Adding scan patterns, changing output format | Changing role constraints |
+
+| Skill | Agent | Agent's narrow role |
 |-------|-------|-----------|
-| `/contracts` | None (handled by main agent) | — |
-| `/critic` | `critic-reviewer` | Adversarial code critique in isolated context |
-| `/ripple` | `ripple-tracer` | Change impact radius tracing |
-| `/prodlens` | `prod-reviewer` | Production 6-axis analysis |
+| `/contracts` | None (main agent) | — |
+| `/critic` | `critic-reviewer` | Role + constraints only. Criteria come from SKILL.md prompt |
+| `/ripple` | `ripple-tracer` | Role + constraints only. Behavioral analysis of candidate files |
+| `/prodlens` | `prod-reviewer` | Role + constraints only. Criteria come from SKILL.md prompt |
 
-`/contracts` is handled directly by the main agent without a sub-agent, because contract creation/verification is more accurate with the current conversation context.
+`/contracts` is handled directly by the main agent without a sub-agent, because contract creation/verification is deterministic (Grep/Glob/Bash) and benefits from conversation context.
 
 ## Data Flows
 
@@ -130,23 +143,27 @@ User: /critic src/services/payment/charge.ts
     │   - If no args: git diff HEAD
     │
     ▼
-[2] Launch critic-reviewer via Agent tool
-    │   Passed: file path list, project root
+[2] Deterministic anti-pattern scan (main agent, no sub-agent)
+    │   - Grep for null-risk, error-handling, security patterns
+    │   - Read ±N lines context to verify each candidate
+    │   - Collect confirmed [SCAN] findings
+    │
+    ▼
+[3] Launch critic-reviewer via Agent tool
+    │   Passed: file paths, project root, [SCAN] findings
     │   NOT passed: user request, code purpose, conversation context
     │
     ▼
-[3] critic-reviewer independently analyzes code
-    │   - Reads target files
-    │   - Reads imported files (interface mismatch check)
-    │   - Applies 4 perspectives (bug, logic, security, production)
+[4] critic-reviewer independently analyzes code
+    │   - Verifies [SCAN] findings + finds additional [REVIEW] issues
     │   - Applies confidence filter (certain + likely only)
     │   - Returns structured results
     │
     ▼
-[4] Format and display report to user
+[5] Format and display report to user
     │
     ▼
-[5] "Fix critical issues?" → fix on user consent
+[6] "Fix critical issues?" → fix on user consent
 ```
 
 ### /ripple flow
@@ -158,17 +175,19 @@ User: /ripple src/services/UserService.ts
 [1] Read changed file + extract key patterns
     │
     ▼
-[2] Launch ripple-tracer via Agent tool
-    │   Passed: changed file path, extracted patterns, project root
+[2] Deterministic dependency scan (main agent, no sub-agent)
+    │   - Grep for imports/calls referencing changed file [SCAN]
+    │   - Glob for test files [SCAN]
+    │   - Check .contracts/ for related contracts [SCAN]
+    │   - Glob for candidate files in same/sibling directories
     │
     ▼
-[3] ripple-tracer traces impact radius
-    │   ├── Direct: import/call relationships (Grep)
-    │   ├── Behavioral: same pattern usage (read code + match)
-    │   └── Contract: related contracts (.contracts/ check)
+[3] Launch ripple-tracer via Agent tool
+    │   Passed: changed file, patterns, [SCAN] results, candidate files
+    │   Task: behavioral analysis of candidates only
     │
     ▼
-[4] Output Ripple Map
+[4] Combine [SCAN] + [REVIEW] → Output Ripple Map
     │
     ▼
 [5] "Run chain verification?" → verify affected files on consent
@@ -183,23 +202,27 @@ User: /prodlens src/services/payment/
 [1] Determine target files
     │
     ▼
-[2] Launch prod-reviewer via Agent tool
-    │   Passed: file path list, project root
+[2] Deterministic production scan (main agent, no sub-agent)
+    │   - Grep for timeout, error handling, security, validation patterns
+    │   - Read ±N lines context to verify each candidate
+    │   - Glob+Read config files (DB, ORM, Docker, etc.)
+    │   - Collect confirmed [SCAN] findings
     │
     ▼
-[3] prod-reviewer performs 6-axis analysis
-    │   ├── Concurrency
-    │   ├── Error Recovery
-    │   ├── Observability
-    │   ├── Security
-    │   ├── Rate Limiting
-    │   └── Input Validation
+[3] Launch prod-reviewer via Agent tool
+    │   Passed: file paths, project root, [SCAN] findings
     │
     ▼
-[4] Output Production Readiness Score (N/6)
+[4] prod-reviewer performs 6-axis analysis
+    │   - Verifies [SCAN] findings + finds additional [REVIEW] issues
+    │   ├── Concurrency, Error Recovery, Observability
+    │   ├── Security, Rate Limiting, Input Validation
     │
     ▼
-[5] "Fix FAIL items?" → fix on user consent
+[5] Output Production Readiness Score (N/6)
+    │
+    ▼
+[6] "Fix FAIL items?" → fix on user consent
 ```
 
 ## Hook Integration
