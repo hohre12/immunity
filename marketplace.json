@@ -1,0 +1,19 @@
+{
+  "name": "immunity",
+  "owner": {
+    "name": "hohre12"
+  },
+  "metadata": {
+    "description": "The immune system for AI-generated code. Remember. Detect. Strengthen.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "immunity",
+      "source": ".",
+      "description": "4 skills for AI code quality: /contracts (self-verifying agent memory), /critic (adversarial code review), /ripple (change impact chain verification), /prodlens (production readiness lens)",
+      "version": "0.1.0",
+      "keywords": ["code-quality", "code-review", "agent-memory", "verification", "production-readiness"]
+    }
+  ]
+}

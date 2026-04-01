@@ -1,0 +1,21 @@
+{
+  "name": "immunity",
+  "version": "0.1.0",
+  "description": "The immune system for AI-generated code. 4 skills: /contracts (self-verifying agent memory), /critic (adversarial code review), /ripple (change impact chain verification), /prodlens (production readiness lens).",
+  "author": {
+    "name": "jwbae"
+  },
+  "homepage": "https://github.com/hohre12/immunity",
+  "repository": "https://github.com/hohre12/immunity",
+  "license": "MIT",
+  "keywords": [
+    "code-quality",
+    "code-review",
+    "agent-memory",
+    "verification",
+    "production-readiness",
+    "adversarial-review"
+  ],
+  "skills": "./skills/",
+  "agents": "./agents/"
+}
