@@ -1,6 +1,6 @@
 ---
 name: critic
-description: Performs adversarial code review in a completely separated context from the agent that wrote the code, structurally eliminating self-confirmation bias.
+description: Performs adversarial code review in a completely separated context from the agent that wrote the code, structurally eliminating self-confirmation bias. Combines deterministic anti-pattern scanning with context-isolated LLM review.
 ---
 
 # /critic — Adversarial Code Review
@@ -20,7 +20,43 @@ When the user runs `/critic`, check the arguments:
 
 Once you have the file path list, proceed to Step 2.
 
-### Step 2: Launch Sub-Agent (Critical)
+### Step 2: Deterministic Anti-Pattern Scan (you do this yourself — no sub-agent)
+
+Before launching the context-isolated sub-agent, perform quick tool-based scans. These findings will be passed to the sub-agent as confirmed evidence.
+
+#### 2a. Null/Undefined Risk Scan
+
+Use Grep on target files:
+
+```
+Grep patterns:
+- "\.findUnique\(|\.findOne\(|\.findFirst\(" → check if result is null-checked before use
+- "\[0\]" after array operations → potential undefined access
+- "JSON\.parse\(" → check for try/catch
+```
+
+#### 2b. Async/Error Handling Scan
+
+```
+Grep patterns:
+- "await " without surrounding try/catch (check context)
+- "new Promise\(" → check for reject handling
+- "\.catch\(\s*\(\s*\)\s*=>" → empty catch (swallowed errors)
+```
+
+#### 2c. Security Quick Scan
+
+```
+Grep patterns:
+- "\$\{.*req\.(body|params|query)" → potential SQL injection via template literals
+- "innerHTML\s*=" → potential XSS
+- "eval\(|Function\(" → dangerous eval
+- "password|secret|token|api.?key" in non-env/non-config files → potential hardcoded secrets
+```
+
+Collect findings as a list with file:line references.
+
+### Step 3: Launch Sub-Agent (Critical — Context Isolation)
 
 **You MUST use the Agent tool to launch a sub-agent.**
 
@@ -29,6 +65,7 @@ When writing the sub-agent prompt, **strictly** follow these rules:
 #### What to pass
 - **Absolute paths** of review target files
 - Project root path
+- **Deterministic scan findings from Step 2** (these are facts, not context about intent)
 
 #### What to NEVER pass
 - What the user requested in the current conversation ("build a payment retry feature", etc.)
@@ -36,7 +73,7 @@ When writing the sub-agent prompt, **strictly** follow these rules:
 - Any explanation of what feature this code implements
 - Any part of the conversation with the user
 
-**Context isolation IS this skill.** If you pass even one piece of context, the skill's value is destroyed.
+**Context isolation IS this skill.** Scan findings are safe to pass because they're objective facts about the code (like a linter report), not context about why the code was written.
 
 Sub-agent prompt template:
 
@@ -47,6 +84,11 @@ You do not know why this code was written or who wrote it. Judge only the code i
 Project root: {project_root}
 Review target files:
 {file path list, one per line}
+
+## Pre-scan findings (deterministic, already verified)
+{paste the findings from Step 2 — these are confirmed facts from Grep scans}
+
+Use these as starting points. Verify each one and add any additional issues you find through code reading.
 
 ## Review Perspectives (by priority)
 
@@ -95,15 +137,16 @@ If you're not confident, do not report. A single false positive destroys the too
 ## Review Process
 1. Read all target files with the Read tool
 2. Also read files they import to check for interface mismatches
-3. Look for issues from the 4 perspectives above
-4. Apply the confidence filter
-5. If no issues found, just say "no issues found". Do NOT fabricate problems.
+3. Verify the pre-scan findings — confirm or dismiss each one
+4. Look for additional issues from the 4 perspectives above
+5. Apply the confidence filter
+6. If no issues found, just say "no issues found". Do NOT fabricate problems.
 
 ## Output Format
 
-For each finding:
+For each finding, mark whether it came from the pre-scan or your own review:
 
-[severity] [category] filepath:line_number
+[severity] [category] [SCAN|REVIEW] filepath:line_number
 Problem description (1-2 sentences)
 Fix: Specific fix method (1 sentence)
 Confidence: certain or likely
@@ -116,6 +159,8 @@ Add a summary at the end:
 FILES_REVIEWED: number
 CRITICAL: number
 WARNING: number
+SCAN_FINDINGS: number (confirmed from pre-scan)
+REVIEW_FINDINGS: number (found by LLM review)
 VERDICT: pass or needs-attention or has-critical-issues
 ```
 
@@ -123,9 +168,9 @@ Agent tool settings:
 - `subagent_type`: `"feature-dev:code-reviewer"`
 - `description`: `"critic adversarial review"`
 
-The agent definition in `agents/critic-reviewer.md` provides the reviewer's role and rules. The inline prompt template above should be used as the sub-agent's instructions — it contains the complete review criteria and output format.
+The agent definition in `agents/critic-reviewer.md` provides the reviewer's role and rules. The inline prompt template above should be used as the sub-agent's instructions.
 
-### Step 3: Output Report
+### Step 4: Output Report
 
 Format the sub-agent's results and show them to the user:
 
@@ -134,21 +179,25 @@ Format the sub-agent's results and show them to the user:
 
 Critical (fix immediately)
 ┌─────────────────────────────────────────────┐
-│ [category] file:line                        │
-│ Problem description                         │
-│                                             │
-│ Fix: How to fix                             │
+│ [BUG] [SCAN] charge.ts:48                  │
+│ findUnique result used without null check.  │
+│ Fix: Add null check before accessing fields │
+└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ [BUG] [REVIEW] charge.ts:26                │
+│ PG failure leaves payment in pending state. │
+│ Fix: Add try/catch, set status to failed    │
 └─────────────────────────────────────────────┘
 
 Warning (review recommended)
 ┌─────────────────────────────────────────────┐
-│ [category] file:line                        │
-│ Problem description                         │
-│                                             │
-│ Fix: How to fix                             │
+│ [SECURITY] [SCAN] charge.ts:44             │
+│ PG error message returned directly to client│
+│ Fix: Log internally, return generic message │
 └─────────────────────────────────────────────┘
 
-Score: critical N / warning M
+Score: critical 2 / warning 1
+Scan: 2 confirmed / Review: 1 found
 ```
 
 If the sub-agent returns PASS:
@@ -157,9 +206,10 @@ If the sub-agent returns PASS:
 ── Critic Report ──
 
 ✓ PASS — No reportable issues found in the reviewed files.
+Pre-scan: 0 patterns matched
 ```
 
-### Step 4: Offer to Fix
+### Step 5: Offer to Fix
 
 Only ask if there are critical issues:
 

@@ -1,6 +1,6 @@
 ---
 name: contracts
-description: Creates self-verifying agent memory by storing important decisions as executable contracts that automatically detect violations across sessions.
+description: Creates self-verifying agent memory by storing important decisions as executable contracts. Verification uses deterministic checks (Grep, Glob, Bash) that work without LLM judgment.
 ---
 
 # /contracts — Self-Verifying Agent Memory
@@ -8,6 +8,8 @@ description: Creates self-verifying agent memory by storing important decisions 
 This skill turns important decisions into **executable contracts**. Unlike CLAUDE.md which is a request, a contract **catches violations**.
 
 When an agent decides "payments must be idempotent", that decision becomes a verifiable rule stored as a YAML file in `.contracts/`. The next session's agent — or a different team member's agent — will be automatically notified if they violate this contract.
+
+**Key difference from other skills:** Contract verification is **deterministic**. When you run `/immunity:contracts verify`, it uses Grep, Glob, and Bash — not LLM judgment. The results are reproducible.
 
 ## Execution Steps
 
@@ -17,7 +19,7 @@ When the user runs `/contracts`, check the arguments:
 
 - `/contracts <path>` — Analyze code at path and propose contracts
 - `/contracts verify` — Verify all contracts (go to Verify Flow)
-- `/contracts verify <path>` — Verify contracts for specific scope
+- `/contracts verify <path>` — Verify contracts for specific scope only
 - `/contracts verify <contract-name>` — Verify a specific contract
 - `/contracts list` — List all contracts
 - `/contracts remove <contract-name>` — Remove a contract
@@ -39,37 +41,58 @@ Before any operation (create, verify, list, remove), check if `.contracts/` exis
 - If no args: run `git diff HEAD --name-only` to get recently changed files
 - If git diff returns nothing: ask the user to provide a target path before continuing. Do NOT proceed without targets.
 
-1. Read the target files using the Read tool
-2. Analyze the code and identify **important invariants** — things that should always be true:
-   - Data validation rules (amount > 0, required fields)
-   - Security requirements (auth checks, input sanitization)
-   - Architectural patterns (error handling, transaction boundaries)
-   - API contracts (response format, status codes)
-   - Business rules (idempotency, rate limits)
+#### 2a. Read and Analyze Target Files
 
-3. Propose contracts to the user:
+Read the target files using the Read tool. Identify **important invariants** — things that should always be true:
+- Data validation rules (amount > 0, required fields)
+- Security requirements (auth checks, input sanitization)
+- Architectural patterns (error handling, transaction boundaries)
+- API contracts (response format, status codes)
+- Business rules (idempotency, rate limits)
+
+#### 2b. Scan for Existing Patterns
+
+Before proposing contracts, use tools to confirm the patterns actually exist:
 
 ```
-I analyzed src/services/payment/ and suggest these contracts:
+For each candidate invariant, use Grep to verify:
+- "The pattern I'm about to propose as a contract — does it actually exist in the code right now?"
+- This prevents proposing contracts for things the code doesn't currently do.
+```
+
+Example: If proposing "all payments must include idempotency key":
+```
+Grep for: idempotencyKey|idempotency_key in src/services/payment/**
+→ Found at charge.ts:15, refund.ts:22
+→ Good: pattern exists, contract is valid
+→ If NOT found: don't propose this contract
+```
+
+#### 2c. Propose Contracts
+
+```
+I analyzed src/services/payment/ and found these existing patterns worth preserving:
 
   1. payment-idempotency
      "All payment requests must include an idempotency key"
      scope: src/services/payment/**
+     evidence: found in charge.ts:15, refund.ts:22
 
   2. payment-amount-validation
      "Payment amount must be greater than 0 and less than or equal to 10,000,000"
      scope: src/services/payment/**
-
-  3. payment-error-recovery
-     "Payment failures must trigger a transaction rollback"
-     scope: src/services/payment/**
+     evidence: found in charge.ts:8
 
 Add, modify, or skip any?
 ```
 
-4. The user selects which contracts to create (or adds custom ones in natural language)
+Note: Include **evidence** — the actual lines where the pattern was found. This proves the contract is based on reality, not hallucination.
 
-5. For each selected contract, generate a YAML file:
+#### 2d. Generate Contract Files
+
+The user selects which contracts to create (or adds custom ones in natural language).
+
+For each selected contract, generate a YAML file:
 
 ```yaml
 name: payment-idempotency
@@ -87,66 +110,72 @@ created_by: "claude-session"
 created_at: "ISO-8601-date"
 ```
 
-6. Write the file to `.contracts/<contract-name>.yml`
-7. Update `.contracts/CONTRACTS.md` index
+Write the file to `.contracts/<contract-name>.yml` and update `.contracts/CONTRACTS.md` index.
 
 ### Check Types
 
-Use these check types when generating contracts:
+Use these check types when generating contracts. **All are deterministic — no LLM needed for verification.**
 
-| Type | Description | Fields |
-|------|-------------|--------|
-| `pattern_present` | Pattern MUST exist in scope | `pattern`, `in` |
-| `pattern_absent` | Pattern must NOT exist in scope | `pattern`, `in` |
-| `test_pass` | Test command must pass | `command` |
-| `file_exists` | File must exist | `path` |
-| `command_success` | Command must exit 0 | `command` |
-| `json_match` | JSON/YAML field must match condition | `path`, `field`, `condition` |
+| Type | Description | Tool used | Fields |
+|------|-------------|-----------|--------|
+| `pattern_present` | Pattern MUST exist in scope | Grep | `pattern`, `in` |
+| `pattern_absent` | Pattern must NOT exist in scope | Grep | `pattern`, `in` |
+| `test_pass` | Test command must pass | Bash | `command` |
+| `file_exists` | File must exist | Glob | `path` |
+| `command_success` | Command must exit 0 | Bash | `command` |
+| `json_match` | JSON/YAML field must match condition | Read | `path`, `field`, `condition` |
 
 ### Verify Flow
 
 When the user runs `/contracts verify`:
 
-1. Read all `.contracts/*.yml` files
-2. For each contract, execute its checks:
-   - `pattern_present` → Use Grep to verify pattern exists in scope
-   - `pattern_absent` → Use Grep to verify pattern does NOT exist in scope
-   - `test_pass` → Use Bash to run the test command
-   - `file_exists` → Use Glob to check file existence
-   - `command_success` → Use Bash to run command, check exit code
-   - `json_match` → Use Read to check JSON field value
+**This is entirely deterministic. Execute each check using the specified tool. No LLM judgment needed.**
 
-3. Output results:
+1. Use Glob to find all `.contracts/*.yml` files
+2. Read each contract file
+3. For each contract, execute its checks:
+   - `pattern_present` → Use Grep to search for the pattern in the scope. If Grep returns results, the check passes. If no results, it fails.
+   - `pattern_absent` → Use Grep to search for the pattern in the scope. If Grep returns NO results, the check passes. If results found, it fails — report the file:line where the pattern was found.
+   - `test_pass` → Use Bash to run the test command. Exit code 0 = pass, non-zero = fail.
+   - `file_exists` → Use Glob to check if the file exists. Found = pass, not found = fail.
+   - `command_success` → Use Bash to run the command. Exit code 0 = pass, non-zero = fail.
+   - `json_match` → Use Read to open the file, extract the field, check the condition.
+
+4. Output results:
 
 ```
 ── Contract Verification ──
 
-✓ payment-idempotency        — passed
-✗ payment-error-recovery     — violation: no rollback in catch block (charge.ts:78)
-✓ api-response-format        — passed
+✓ payment-idempotency        — passed (pattern found in 3 files)
+✗ payment-error-recovery     — VIOLATION
+  └── pattern_present check failed: "rollback|ROLLBACK" not found in src/services/payment/charge.ts
+✓ api-response-format        — passed (pattern found in 12 files)
 
 Score: 2/3 passing
 
 Fix violations?
 ```
 
-4. If the user agrees, fix the violations in order.
+5. If the user agrees, fix the violations in order.
 
 ### CONTRACTS.md Index Format
 
 ```markdown
 # Contracts
 
-| Contract | Assertion | Scope | Status |
-|----------|-----------|-------|--------|
-| payment-idempotency | All payment requests must include an idempotency key | src/services/payment/** | active |
-| api-response-format | All API responses must follow { success, data, error } format | src/controllers/** | active |
+| Contract | Assertion | Scope | Checks | Status |
+|----------|-----------|-------|--------|--------|
+| payment-idempotency | All payment requests must include an idempotency key | src/services/payment/** | pattern_present | active |
+| api-response-format | All API responses must follow { success, data, error } format | src/controllers/** | pattern_present | active |
 ```
 
 ### Important Rules
 
 - **Propose, don't impose.** Always let the user choose which contracts to create.
+- **Show evidence.** When proposing a contract, show the file:line where the pattern currently exists.
+- **Verify before proposing.** Use Grep to confirm the pattern exists before suggesting it as a contract. Never propose a contract based on assumption.
 - **Prefer simple checks.** `pattern_present` and `pattern_absent` cover most cases. Don't over-engineer.
 - **One contract, one concern.** Each contract should verify exactly one invariant.
+- **Verification is deterministic.** Never use LLM judgment in the verify flow. Grep/Glob/Bash only.
 - **Contracts must be git-committable.** The `.contracts/` directory is meant to be shared with the team.
 - **Don't create duplicate contracts.** Check existing `.contracts/` before creating new ones.

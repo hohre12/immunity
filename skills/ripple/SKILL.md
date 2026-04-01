@@ -1,11 +1,13 @@
 ---
 name: ripple
-description: Traces the impact radius of code changes by identifying direct dependencies, behavioral similarities, and related contracts to enable chain verification.
+description: Traces the impact radius of code changes by combining deterministic dependency scanning with behavioral pattern analysis. Finds direct dependents, same-pattern code, and related contracts.
 ---
 
 # /ripple — Change Impact Chain Verification
 
 This skill traces the **ripple effect** of code changes. When you modify `UserService.update()`, it finds not only files that directly import it, but also files using the **same behavioral patterns** (like `OrderService.update()` with the same optimistic locking pattern).
+
+Unlike simply asking "what does this change affect?", this skill performs **deterministic dependency scans first**, then applies LLM pattern matching on top.
 
 ## Execution Steps
 
@@ -18,107 +20,150 @@ When the user runs `/ripple`, check the arguments:
 
 If no files are found, ask the user for a target file.
 
-### Step 2: Analyze the Changed Code
+### Step 2: Deterministic Dependency Scan (you do this yourself — no sub-agent)
 
-Read the target file(s) and extract **key patterns**:
+Perform these tool-based scans before launching any sub-agent.
 
-- What external services/APIs does it call?
-- What database operations does it perform?
-- What patterns does it use? (transactions, locks, retries, event emission, caching, etc.)
-- What error handling approach does it follow?
-- What data structures/interfaces does it consume or produce?
+#### 2a. Extract Exports from Changed File
+
+Read the changed file and identify all exported symbols:
+- Function names, class names, type/interface names, constants
+- Default export name
+
+#### 2b. Find Direct Dependents
+
+Use Grep to find every file that references the changed file:
+
+```
+Grep for each of these patterns across the project:
+- import.*from.*['"].*{changed_file_name}['"]
+- require\(['"].*{changed_file_name}['"]\)
+- The exported function/class names from Step 2a
+```
+
+Record each match with file:line.
+
+#### 2c. Find Test Files
+
+Use Glob to find test files for the changed file:
+
+```
+Glob patterns:
+- **/{changed_file_name}.test.{ts,tsx,js,jsx}
+- **/{changed_file_name}.spec.{ts,tsx,js,jsx}
+- **/__tests__/{changed_file_name}.*
+```
+
+#### 2d. Find Related Contracts
+
+Use Glob to check if `.contracts/` exists:
+
+```
+Glob: .contracts/*.yml
+```
+
+If contracts exist, Read each one and check if the changed file path matches any contract's `scope` patterns.
+
+#### 2e. Find Structurally Similar Files
+
+Use Glob to find files in the same directory or sibling directories:
+
+```
+Glob: {same_directory}/*.{ts,tsx,js,jsx}
+Glob: {parent_directory}/*/*.{ts,tsx,js,jsx}
+```
+
+These are candidates for behavioral analysis in Step 3.
+
+Collect all deterministic findings into a structured list.
 
 ### Step 3: Launch Ripple Tracer Sub-Agent
 
-Use the Agent tool to launch a sub-agent that traces the impact radius.
+Pass the deterministic scan results AND the list of structurally similar files to the sub-agent. The sub-agent's job is to read those similar files and determine if they use the same behavioral patterns.
 
 Sub-agent prompt template:
 
 ```
-You are a code impact analyst. Trace the ripple effect of changes to the specified files.
+You are a code impact analyst. Determine which of the candidate files use the same behavioral patterns as the changed files.
 
 Project root: {project_root}
 Changed files:
 {file paths, one per line}
 
-Key patterns found in changed files:
-{extracted patterns from Step 2}
+## What changed (summary from main agent's reading)
+{brief description of what the changed file does, what patterns it uses}
+
+## Pre-scan results (deterministic, already verified)
+Direct dependents found:
+{list from Step 2b with file:line}
+
+Test files found:
+{list from Step 2c}
+
+Related contracts:
+{list from Step 2d, or "none"}
+
+## Candidate files for behavioral analysis
+{list from Step 2e — files in same/sibling directories}
 
 ## Your Task
 
-Find all code that could be affected by changes to the above files. Categorize findings into three groups:
-
-### 1. Direct — Import/call relationships
-Use Grep to find:
-- Files that import/require the changed files
-- Files that call functions defined in the changed files
-- Test files for the changed files
-
-### 2. Behavioral — Same pattern usage
-Read files in similar directories and find code that uses the SAME patterns as the changed files. Examples:
+Read each candidate file and determine if it uses the SAME behavioral patterns as the changed file. Specifically look for:
 - Same transaction pattern (optimistic locking, pessimistic locking)
 - Same retry/error handling pattern
-- Same external API call pattern
+- Same external API call pattern  
 - Same data transformation pattern
 - Same caching strategy
+- Same event emission pattern
 
-Only report behavioral matches where the SAME change might need to be applied. Don't report vague similarities.
-
-### 3. Contract — Related contracts
-Check if `.contracts/` directory exists. If so, read the contract files and find any whose scope includes the changed files.
+Only report matches where the SAME change might need to be applied. "Both files use async/await" is NOT a match. "Both files implement optimistic locking with version column check before update" IS a match.
 
 ## Confidence Filter
-- certain: Directly imports or calls the changed code
-- likely: Uses the exact same pattern and may need the same update
+- certain: Code clearly uses the exact same pattern
+- likely: Code uses a very similar pattern that probably needs the same update
 - possible: Do NOT report
 
 ## Output Format
 
-RIPPLE MAP:
-{changed_file} (changed)
-├── Direct
-│   ├── file.ts — function() directly calls changed code
-│   └── file.test.ts — tests for changed code
-├── Behavioral
-│   ├── other-service.ts — uses same pattern: {pattern name}
-│   └── ⚠ May need the same change applied
-└── Contract
-    └── contract-name — needs re-verification
+BEHAVIORAL_MATCHES:
+- file.ts — uses same pattern: {pattern name}. Reason: {why this needs attention}
+- file.ts — uses same pattern: {pattern name}. Reason: {why this needs attention}
 
----
-DIRECT_COUNT: number
 BEHAVIORAL_COUNT: number
-CONTRACT_COUNT: number
+
+If no behavioral matches found:
+BEHAVIORAL_MATCHES: none
+BEHAVIORAL_COUNT: 0
 ```
 
 Agent tool settings:
 - `subagent_type`: `"Explore"`
 - `description`: `"ripple impact analysis"`
 
-The agent definition in `agents/ripple-tracer.md` provides the tracer's role and rules. The inline prompt template above should be used as the sub-agent's instructions — it contains the complete impact analysis criteria and output format.
+The agent definition in `agents/ripple-tracer.md` provides the tracer's role and rules.
 
-### Step 4: Output Ripple Map
+### Step 4: Combine and Output Ripple Map
 
-Format the sub-agent's results and show them to the user:
+Merge the deterministic scan results (Direct, Tests, Contracts) with the sub-agent's behavioral analysis results:
 
 ```
 ── Ripple Map ──
 
 src/services/UserService.ts (changed)
 │
-├── Direct (import/call relationships)
-│   ├── src/controllers/UserController.ts — updateUser() directly calls UserService.update()
-│   ├── src/services/UserService.test.ts — 3 tests cover update()
-│   └── src/middleware/auth.ts — getUserFromToken() calls UserService.findById()
+├── Direct (import/call relationships) [SCAN]
+│   ├── src/controllers/UserController.ts:12 — imports UserService
+│   ├── src/middleware/auth.ts:34 — calls UserService.findById()
+│   └── src/services/UserService.test.ts — 3 test cases
 │
-├── Behavioral (same pattern)
-│   ├── src/services/OrderService.ts — update() uses same pattern: optimistic lock + event emission
+├── Behavioral (same pattern) [REVIEW]
+│   ├── src/services/OrderService.ts — uses same pattern: optimistic lock + event emission
 │   │   └── ⚠ May need the same change
-│   └── src/services/ProductService.ts — update() uses same pattern: optimistic lock
+│   └── src/services/ProductService.ts — uses same pattern: optimistic lock
 │       └── ⚠ Review recommended
 │
-└── Contract
-    └── user-data-integrity — needs re-verification
+└── Contract [SCAN]
+    └── user-data-integrity — scope matches, needs re-verification
 
 Direct: 3 / Behavioral: 2 / Contract: 1
 
@@ -131,7 +176,7 @@ If the user agrees to chain verification:
 
 1. For each **Direct** file: Read and check if the interface is still compatible with the changes
 2. For each **Behavioral** file: Read and check if the same modification needs to be applied
-3. For each **Contract**: Run the contract's checks (same as `/contracts verify`)
+3. For each **Contract**: Run the contract's checks (same as `/immunity:contracts verify`)
 
 Report findings:
 
@@ -148,7 +193,9 @@ Fix issues found?
 
 ### Important Rules
 
-- **Behavioral analysis is heuristic, not precise.** Claude reads code and identifies patterns — it's not an AST engine. Be transparent about this.
-- **Don't report vague similarities.** "Both files use async/await" is not a behavioral match. "Both files implement optimistic locking with version column check" is.
+- **Always run deterministic scans first.** Grep/Glob results are facts. Behavioral analysis is judgment.
+- **Label [SCAN] vs [REVIEW] in output.** Users trust deterministic findings more.
+- **Don't report vague similarities.** "Both files use async/await" is not a behavioral match.
 - **Direct dependencies are the priority.** Always report those. Behavioral findings are supplementary.
 - **If `.contracts/` doesn't exist, skip the Contract section.** Don't mention it.
+- **Behavioral analysis is heuristic.** Be transparent about this in the output.
